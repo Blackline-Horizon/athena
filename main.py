@@ -12,9 +12,6 @@ load_dotenv()
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", 3001))
 
-# Print environment settings for debugging
-print(f"Running with HOST={HOST} and PORT={PORT}")
-
 app = FastAPI()
 
 @app.get("/", response_class=PlainTextResponse)
