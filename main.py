@@ -25,7 +25,7 @@ app.add_middleware(
 
 @app.get("/", response_class=PlainTextResponse)
 def read_root():
-    return f"Reporting from Athena Service! Running on {HOST}:{PORT}"
+    return f"Reporting from Athena Service!"
 
 @app.get("/items/{item_id}")
 def read_item(item_id: int, q: Union[str, None] = None):
