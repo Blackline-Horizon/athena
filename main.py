@@ -1,35 +1,104 @@
-from typing import Union
-import uvicorn
-from fastapi import FastAPI
+# main.py
+
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from sqlalchemy import create_engine, func
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import SQLAlchemyError
 from dotenv import load_dotenv
 import os
 
-# Load environment variables from the .env file
+from models import Base, Type, Alert
+from schemas import Coordinates, AlertSummary, InsightResponse, ErrorResponse
+
+# Load environment variables
 load_dotenv()
 
 # Get values from environment variables
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", 3001))
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 app = FastAPI()
 
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Adjust in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-@app.get("/", response_class=PlainTextResponse)
-def read_root():
-    return f"Reporting from Athena Service!"
+# Create synchronous engine
+engine = create_engine(
+    DATABASE_URL,
+    echo=True,  # Set to False in production
+)
 
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: Union[str, None] = None):
-    return {"item_id": item_id, "q": q}
+# Create sessionmaker with autoflush enabled
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=True,
+    bind=engine
+)
+
+@app.on_event("startup")
+def startup_event():
+    # Create the 'map' schema if it doesn't exist
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        conn.execute(text("CREATE SCHEMA IF NOT EXISTS map"))
+    # Create tables within the 'map' schema
+    Base.metadata.create_all(bind=engine)
+
+@app.get("/")
+def read_root():
+    return {"message": "Alert Insights Service is up and running!"}
+
+@app.post("/insights/alerts", response_model=InsightResponse, responses={500: {"model": ErrorResponse}})
+def get_alerts_nearby(coordinates: Coordinates):
+    db = SessionLocal()
+    try:
+        # Build a point from input coordinates
+        point_wkt = f'POINT({coordinates.longitude} {coordinates.latitude})'
+        point = func.ST_GeogFromText(point_wkt)
+
+        # Define the radius in meters
+        radius_meters = coordinates.radius * 1000  # Convert km to meters
+
+        # Perform spatial query to find alerts within the radius
+        alerts = db.query(Alert, Type).join(Type).filter(
+            func.ST_DWithin(
+                Alert.coordinates,
+                point,
+                radius_meters
+            )
+        ).all()
+
+        # Aggregate results
+        alert_summaries = [
+            AlertSummary(
+                alert_id=alert.Alert.alert_id,
+                type_id=alert.Alert.type_id,
+                type_name=alert.Type.name,
+                timesetamp=alert.Alert.timesetamp
+            )
+            for alert in alerts
+        ]
+
+        response = InsightResponse(
+            total_alerts=len(alert_summaries),
+            alerts=alert_summaries
+        )
+
+        return response
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Database error")
+    finally:
+        db.close()
 
 if __name__ == "__main__":
-    uvicorn.run(app, host=HOST, port=PORT, log_level="info")
+    import uvicorn
+    uvicorn.run("main:app", host=HOST, port=PORT, log_level="info")
