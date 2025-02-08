@@ -1,10 +1,10 @@
 # main.py
-
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
+import json
 from dotenv import load_dotenv
 import os
 
@@ -12,7 +12,7 @@ from models import Base, Type, Alert
 from schemas import Coordinates, AlertSummary, InsightResponse, ErrorResponse
 
 # Load environment variables
-load_dotenv()
+load_dotenv(dotenv_path=".env.local")
 
 # Get values from environment variables
 HOST = os.getenv("HOST", "127.0.0.1")
@@ -55,6 +55,25 @@ def startup_event():
 @app.get("/")
 def read_root():
     return {"message": "Alert Insights Service is up and running!"}
+
+@app.get("/events")
+def get_events():
+    try:
+        # Path to the map-data.json file
+        json_file_path = os.path.join(os.getcwd(), "Mock Data", "map-data.json")
+        
+        # Read the JSON file
+        with open(json_file_path, "r") as file:
+            events_data = json.load(file)
+
+        return {"events": events_data["events"]}  # Return the events part of the JSON
+
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found")
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Error decoding JSON")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/insights/alerts", response_model=InsightResponse, responses={500: {"model": ErrorResponse}})
 def get_alerts_nearby(coordinates: Coordinates):
