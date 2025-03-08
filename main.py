@@ -9,15 +9,16 @@ from dotenv import load_dotenv
 import os
 
 from models import Base, Type, Alert
-from schemas import Coordinates, AlertSummary, InsightResponse, ErrorResponse
+from schemas import Coordinates, AlertSummary, InsightResponse, ErrorResponse, GetReport
 
 # Load environment variables
-load_dotenv(dotenv_path=".env.local")
+load_dotenv(dotenv_path=".env")
 
 # Get values from environment variables
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", 3001))
 DATABASE_URL = os.getenv("DATABASE_URL")
+
 
 app = FastAPI()
 
@@ -49,12 +50,48 @@ def startup_event():
     from sqlalchemy import text
     with engine.connect() as conn:
         conn.execute(text("CREATE SCHEMA IF NOT EXISTS map"))
+        conn.commit()
     # Create tables within the 'map' schema
     Base.metadata.create_all(bind=engine)
 
 @app.get("/")
 def read_root():
     return {"message": "Alert Insights Service is up and running!"}
+
+@app.get("/report_data")
+def get_report_data(resolution:GetReport):
+    data = {
+        'time_series_overall': {
+            'date_created': ['2023-01', '2023-02', '2023-03', '2023-04'],
+            'alert_count': [100, 150, 120, 180]
+        },
+        'alerts_last_4w': 200,
+        'last_4w': 170,
+        'predicted_last_4w': 190,
+        # Grouped data for various categories, with groups indexed by integers
+        'grouped_data': {
+            "resolution_reason": {
+                '2023-01': {1: 30, -1: 70},
+                '2023-02': {1: 50, -1: 100},
+                '2023-03': {1: 40, -1: 80},
+                '2023-04': {1: 60, -1: 120}
+            },
+            "device_type": {
+                # Add similar structure here when data is available
+            },
+            "sensor_type": {
+                # Add similar structure here when data is available
+            },
+            "industry": {
+                # Add similar structure here when data is available
+            },
+            "event_type": {
+                # Add similar structure here when data is available
+            }
+        }
+    }
+
+    return data
 
 @app.get("/events")
 def get_events():
