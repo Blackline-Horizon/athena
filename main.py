@@ -59,15 +59,12 @@ def read_root():
     return {"message": "Alert Insights Service is up and running!"}
 
 @app.get("/report_data")
-def get_report_data(resolution:GetReport):
+def get_report_data(filters:GetReport):
     data = {
         'time_series_overall': {
             'date_created': ['2023-01', '2023-02', '2023-03', '2023-04'],
             'alert_count': [100, 150, 120, 180]
         },
-        'alerts_last_4w': 200,
-        'last_4w': 170,
-        'predicted_last_4w': 190,
         # Grouped data for various categories, with groups indexed by integers
         'grouped_data': {
             "resolution_reason": {
