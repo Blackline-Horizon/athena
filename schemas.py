@@ -1,7 +1,5 @@
-# schemas.py
-
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any, Union
 from datetime import datetime, date
 
 class Coordinates(BaseModel):
@@ -30,7 +28,18 @@ class GetReport(BaseModel):
     industry: Optional[List[int]] = Field(default=None)
     date_start: date = Field(...)
     date_end: date = Field(...)
-    countries: Optional[List[int]] = Field(default=None) 
+    countries: Optional[List[int]] = Field(default=None)
+
+class FilterParams(BaseModel):
+    sensor_types: Optional[List[str]] = None
+    industries: Optional[List[str]] = None
+    event_types: Optional[List[str]] = None
+    resolution_reasons: Optional[List[str]] = None
+    device_types: Optional[List[str]] = None
+    countries: Optional[List[str]] = None
+    continents: Optional[List[str]] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
 
 class ErrorResponse(BaseModel):
     detail: str

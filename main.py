@@ -1,15 +1,10 @@
-# main.py
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import create_engine, func
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.exc import SQLAlchemyError
 import json
 from dotenv import load_dotenv
 import os
-
-from models import Base, Type, Alert
-from schemas import Coordinates, AlertSummary, InsightResponse, ErrorResponse, GetReport
+from datetime import datetime
+from typing import List, Optional
 
 # Load environment variables
 load_dotenv(dotenv_path=".env")
@@ -17,8 +12,6 @@ load_dotenv(dotenv_path=".env")
 # Get values from environment variables
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", 3001))
-DATABASE_URL = os.getenv("DATABASE_URL")
-
 
 app = FastAPI()
 
@@ -31,126 +24,126 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Create synchronous engine
-engine = create_engine(
-    DATABASE_URL,
-    echo=True,  # Set to False in production
-)
-
-# Create sessionmaker with autoflush enabled
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=True,
-    bind=engine
-)
-
-@app.on_event("startup")
-def startup_event():
-    # Create the 'map' schema if it doesn't exist
-    from sqlalchemy import text
-    with engine.connect() as conn:
-        conn.execute(text("CREATE SCHEMA IF NOT EXISTS map"))
-        conn.commit()
-    # Create tables within the 'map' schema
-    Base.metadata.create_all(bind=engine)
-
 @app.get("/")
 def read_root():
     return {"message": "Alert Insights Service is up and running!"}
 
-@app.get("/report_data")
-def get_report_data(filters:GetReport):
-    data = {
-        'time_series_overall': {
-            'date_created': ['2023-01', '2023-02', '2023-03', '2023-04'],
-            'alert_count': [100, 150, 120, 180]
-        },
-        # Grouped data for various categories, with groups indexed by integers
-        'grouped_data': {
-            "resolution_reason": {
-                '2023-01': {1: 30, -1: 70},
-                '2023-02': {1: 50, -1: 100},
-                '2023-03': {1: 40, -1: 80},
-                '2023-04': {1: 60, -1: 120}
-            },
-            "device_type": {
-                # Add similar structure here when data is available
-            },
-            "sensor_type": {
-                # Add similar structure here when data is available
-            },
-            "industry": {
-                # Add similar structure here when data is available
-            },
-            "event_type": {
-                # Add similar structure here when data is available
-            }
-        }
-    }
-
-    return data
-
-@app.get("/events")
-def get_events():
+@app.get("/alerts")
+def get_alerts(
+    sensor_types: Optional[List[str]] = Query(None),
+    industries: Optional[List[str]] = Query(None),
+    event_types: Optional[List[str]] = Query(None),
+    resolution_reasons: Optional[List[str]] = Query(None),
+    device_types: Optional[List[str]] = Query(None),
+    countries: Optional[List[str]] = Query(None),
+    continents: Optional[List[str]] = Query(None),
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+):
+    """
+    Get filtered alerts based on provided parameters
+    """
     try:
-        # Path to the map-data.json file
-        json_file_path = os.path.join(os.getcwd(), "Mock Data", "map-data.json")
+        # Path to the alerts.json file
+        json_file_path = os.path.join(os.getcwd(), "Mock Data", "alerts.json")
         
         # Read the JSON file
         with open(json_file_path, "r") as file:
-            events_data = json.load(file)
-
-        return {"events": events_data["events"]}  # Return the events part of the JSON
-
+            data = json.load(file)
+        
+        # Get all alerts
+        alerts = data["alerts"]
+        meta = data["meta"]
+        
+        # Apply filters
+        filtered_alerts = alerts
+        
+        # Filter by sensor type
+        if sensor_types:
+            filtered_alerts = [a for a in filtered_alerts if a["sensor_type"] in sensor_types]
+            
+        # Filter by industry
+        if industries:
+            filtered_alerts = [a for a in filtered_alerts if a["industry"] in industries]
+            
+        # Filter by event type
+        if event_types:
+            filtered_alerts = [a for a in filtered_alerts if a["event_type"] in event_types]
+            
+        # Filter by resolution reason
+        if resolution_reasons:
+            filtered_alerts = [a for a in filtered_alerts if a["resolution_reason"] in resolution_reasons]
+            
+        # Filter by device type
+        if device_types:
+            filtered_alerts = [a for a in filtered_alerts if a["device_type"] in device_types]
+            
+        # Filter by country
+        if countries:
+            filtered_alerts = [a for a in filtered_alerts if a["country_name"] in countries]
+            
+        # Filter by continent
+        if continents:
+            continent_countries = []
+            for continent in continents:
+                if continent in meta["countries"]:
+                    continent_countries.extend(meta["countries"][continent])
+            
+            filtered_alerts = [a for a in filtered_alerts if a["country_name"] in continent_countries]
+            
+        # Filter by date range
+        if start_date:
+            start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            filtered_alerts = [a for a in filtered_alerts if datetime.fromisoformat(a["date_created"].replace(' ', 'T')) >= start]
+            
+        if end_date:
+            end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            filtered_alerts = [a for a in filtered_alerts if datetime.fromisoformat(a["date_created"].replace(' ', 'T')) <= end]
+        
+        # Calculate metrics
+        total_alerts = len(filtered_alerts)
+        
+        # Group alerts by date for avg calculation
+        date_groups = {}
+        for alert in filtered_alerts:
+            date = alert["date_created"].split()[0]
+            if date not in date_groups:
+                date_groups[date] = 0
+            date_groups[date] += 1
+        
+        avg_alerts_per_day = sum(date_groups.values()) / len(date_groups) if date_groups else 0
+        
+        # Calculate distribution for all required variables
+        distribution_data = {
+            "sensor_type": {},
+            "resolution_reason": {},
+            "device_type": {},
+            "industry": {},
+            "event_type": {}
+        }
+        
+        for alert in filtered_alerts:
+            for key in distribution_data.keys():
+                value = alert[key]
+                if value not in distribution_data[key]:
+                    distribution_data[key][value] = 0
+                distribution_data[key][value] += 1
+            
+        return {
+            "alerts": filtered_alerts,
+            "meta": meta,
+            "metrics": {
+                "total_alerts": total_alerts,
+                "avg_alerts_per_day": avg_alerts_per_day,
+                "distribution_data": distribution_data
+            }
+        }
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(status_code=404, detail="Alerts data file not found")
     except json.JSONDecodeError:
         raise HTTPException(status_code=500, detail="Error decoding JSON")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/insights/alerts", response_model=InsightResponse, responses={500: {"model": ErrorResponse}})
-def get_alerts_nearby(coordinates: Coordinates):
-    db = SessionLocal()
-    try:
-        # Build a point from input coordinates
-        point_wkt = f'POINT({coordinates.longitude} {coordinates.latitude})'
-        point = func.ST_GeogFromText(point_wkt)
-
-        # Define the radius in meters
-        radius_meters = coordinates.radius * 1000  # Convert km to meters
-
-        # Perform spatial query to find alerts within the radius
-        alerts = db.query(Alert, Type).join(Type).filter(
-            func.ST_DWithin(
-                Alert.coordinates,
-                point,
-                radius_meters
-            )
-        ).all()
-
-        # Aggregate results
-        alert_summaries = [
-            AlertSummary(
-                alert_id=alert.Alert.alert_id,
-                type_id=alert.Alert.type_id,
-                type_name=alert.Type.name,
-                timesetamp=alert.Alert.timesetamp
-            )
-            for alert in alerts
-        ]
-
-        response = InsightResponse(
-            total_alerts=len(alert_summaries),
-            alerts=alert_summaries
-        )
-
-        return response
-    except SQLAlchemyError as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Database error")
-    finally:
-        db.close()
 
 if __name__ == "__main__":
     import uvicorn
