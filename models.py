@@ -1,30 +1,27 @@
-# models.py
-
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, MetaData
-from sqlalchemy.orm import relationship
-from geoalchemy2 import Geography
+from sqlalchemy import Column, Integer, String, Float, DateTime, MetaData
 from datetime import datetime
 
 # Specify the schema
 metadata = MetaData(schema='map')
-
 Base = declarative_base(metadata=metadata)
-
-class Type(Base):
-    __tablename__ = 'types'
-
-    type_id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-
-    alerts = relationship('Alert', back_populates='type')
 
 class Alert(Base):
     __tablename__ = 'alerts'
 
-    alert_id = Column(Integer, primary_key=True, index=True)
-    type_id = Column(Integer, ForeignKey('map.types.type_id'), nullable=False)
-    timesetamp = Column(DateTime, default=datetime.utcnow)
-    coordinates = Column(Geography(geometry_type='POINT', srid=4326), nullable=False)
-
-    type = relationship('Type', back_populates='alerts')
+    id = Column(Integer, primary_key=True, index=True)
+    device_type = Column(String)
+    device_type_id = Column(Integer)
+    date_created = Column(DateTime, default=datetime.utcnow)
+    sensor_type = Column(String)
+    event_type = Column(String)
+    event_type_id = Column(Integer)
+    resolution_reason = Column(String)
+    industry = Column(String)
+    industry_id = Column(Integer)
+    longitude = Column(Float)
+    latitude = Column(Float)
+    country = Column(String)
+    resolution_reason_id = Column(Integer)
+    sensor_type_id = Column(Integer)
+    country_id = Column(Integer)
