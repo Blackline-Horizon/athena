@@ -1,13 +1,14 @@
+# models.py
+
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String, Float, DateTime, MetaData
+from sqlalchemy import Column, Integer, String, Float, DateTime
 from datetime import datetime
 
-# Specify the schema
-metadata = MetaData(schema='map')
-Base = declarative_base(metadata=metadata)
+Base = declarative_base()
 
 class Alert(Base):
     __tablename__ = 'alerts'
+    __table_args__ = {'schema': 'map'}
 
     id = Column(Integer, primary_key=True, index=True)
     device_type = Column(String)
